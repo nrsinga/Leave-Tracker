@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { supabase, signIn, signUp } from '../lib/supabase'
-import { Building2, Mail, Lock, User, UserPlus } from 'lucide-react'
+import { LogIn, Building2, AlertCircle } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 
 interface LoginProps {
@@ -8,250 +8,212 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin }: LoginProps) {
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [email, setEmail] = useState('nrsinga@gmail.com')
+  const [password, setPassword] = useState('password123')
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    first_name: '',
-    last_name: '',
-    role: 'user'
-  })
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
     try {
-      if (isSignUp) {
-        const { data, error } = await signUp(formData.email, formData.password, {
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          role: formData.role
-        })
+      console.log('🔐 Attempting login with:', { email })
+      
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-        if (error) throw error
+      console.log('🔐 Sign in response:', { data, error: signInError })
 
-        if (data.user) {
-          toast.success('Account created successfully!')
-          onLogin(data.user)
-        }
+      if (signInError) {
+        console.error('❌ Sign in error:', signInError)
+        setError(signInError.message)
+        toast.error(signInError.message)
+        return
+      }
+
+      if (data.user) {
+        console.log('✅ Login successful, user:', data.user)
+        console.log('🔄 Calling onLogin callback...')
+        toast.success('Login successful!')
+        
+        // Call the onLogin callback to trigger the parent component to update
+        onLogin(data.user)
+        console.log('✅ onLogin callback called')
       } else {
-        const { data, error } = await signIn(formData.email, formData.password)
-
-        if (error) throw error
-
-        if (data.user) {
-          toast.success('Signed in successfully!')
-          onLogin(data.user)
-        }
+        console.error('❌ No user data received')
+        setError('No user data received')
+        toast.error('Login failed - no user data')
       }
     } catch (error: any) {
-      console.error('Auth error:', error)
-      toast.error(error.message || 'Authentication failed')
+      console.error('💥 Unexpected error:', error)
+      setError(error.message)
+      toast.error(error.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleTestLogin = async (email: string) => {
-    setLoading(true)
+  const testConnection = async () => {
     try {
-      const { data, error } = await signIn(email, 'password123')
+      console.log('🔍 Testing database connection...')
+      const { data, error } = await supabase.from('employees').select('count')
+      console.log('🔍 Connection test result:', { data, error })
       
-      if (error) throw error
-      
-      if (data.user) {
-        toast.success('Test login successful!')
-        onLogin(data.user)
+      if (error) {
+        console.error('❌ Database connection failed:', error)
+        toast.error(`Database connection failed: ${error.message}`)
+      } else {
+        console.log('✅ Database connection successful')
+        toast.success('Database connection successful')
       }
-    } catch (error: any) {
-      console.error('Test login error:', error)
-      toast.error(error.message || 'Test login failed')
-    } finally {
-      setLoading(false)
+    } catch (err: any) {
+      console.error('💥 Connection error:', err)
+      toast.error(`Connection failed: ${err.message}`)
+    }
+  }
+
+  const testEmployeeFetch = async () => {
+    try {
+      console.log('👤 Testing employee fetch for nrsinga@gmail.com...')
+      
+      // First get the user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      console.log('👤 Current user:', { user, userError })
+      
+      if (user) {
+        // Then try to fetch employee profile
+        const { data: employee, error: empError } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+        
+        console.log('👤 Employee fetch result:', { employee, empError })
+        
+        if (empError) {
+          toast.error(`Employee fetch failed: ${empError.message}`)
+        } else {
+          toast.success(`Employee found: ${employee.first_name} ${employee.last_name}`)
+        }
+      } else {
+        toast.error('No authenticated user found')
+      }
+    } catch (err: any) {
+      console.error('💥 Employee fetch error:', err)
+      toast.error(`Employee fetch failed: ${err.message}`)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-8">
-        {/* Header */}
         <div className="text-center">
-          <div className="flex justify-center">
-            <div className="bg-indigo-600 p-3 rounded-full">
-              <Building2 className="h-8 w-8 text-white" />
-            </div>
+          <div className="mx-auto h-16 w-16 bg-indigo-600 rounded-full flex items-center justify-center">
+            <Building2 className="h-8 w-8 text-white" />
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
             IOCO Leave Tracker
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            {isSignUp ? 'Create your account' : 'Sign in to your account'}
+            Sign in to manage your leave requests
           </p>
         </div>
 
-        {/* Test Login Buttons */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-blue-900 mb-3">Quick Test Login</h3>
-          <div className="space-y-2">
-            <button
-              onClick={() => handleTestLogin('nrsinga@gmail.com')}
-              disabled={loading}
-              className="w-full text-left px-3 py-2 text-sm bg-white border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50"
-            >
-              <div className="font-medium">Naresh Singa (Admin)</div>
-              <div className="text-blue-600">nrsinga@gmail.com</div>
-            </button>
-            <button
-              onClick={() => handleTestLogin('naresh.pema@ioco.tech')}
-              disabled={loading}
-              className="w-full text-left px-3 py-2 text-sm bg-white border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50"
-            >
-              <div className="font-medium">Naresh Pema (User)</div>
-              <div className="text-blue-600">naresh.pema@ioco.tech</div>
-            </button>
-          </div>
-        </div>
-
-        {/* Login Form */}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            {isSignUp && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="first_name" className="sr-only">
-                      First Name
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        id="first_name"
-                        name="first_name"
-                        type="text"
-                        required={isSignUp}
-                        value={formData.first_name}
-                        onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                        className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                        placeholder="First Name"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="last_name" className="sr-only">
-                      Last Name
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        id="last_name"
-                        name="last_name"
-                        type="text"
-                        required={isSignUp}
-                        value={formData.last_name}
-                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                        className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                        placeholder="Last Name"
-                      />
+          <div className="bg-white p-8 rounded-xl shadow-lg space-y-6">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      Login Failed
+                    </h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      {error}
                     </div>
                   </div>
                 </div>
-
-                <div>
-                  <label htmlFor="role" className="sr-only">
-                    Role
-                  </label>
-                  <select
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  >
-                    <option value="user">Employee</option>
-                    <option value="admin">Administrator</option>
-                  </select>
-                </div>
-              </>
+              </div>
             )}
 
             <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email Address
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Email address"
-                />
-              </div>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="firstname.surname@ioco.tech"
+              />
             </div>
 
             <div>
-              <label htmlFor="password" className="sr-only">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Password"
-                />
-              </div>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter your password"
+              />
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                {isSignUp ? (
-                  <UserPlus className="h-5 w-5 text-indigo-500 group-hover:text-indigo-400" />
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 ) : (
-                  <Lock className="h-5 w-5 text-indigo-500 group-hover:text-indigo-400" />
+                  <>
+                    <LogIn className="h-5 w-5 mr-2" />
+                    Sign In
+                  </>
                 )}
-              </span>
-              {loading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}
-            </button>
-          </div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={testConnection}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Test DB
+              </button>
+            </div>
 
-          <div className="text-center">
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+              onClick={testEmployeeFetch}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
-              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              Test Employee Fetch
             </button>
           </div>
         </form>
+
+        <div className="text-center text-sm text-gray-600">
+          <p>Admin: nrsinga@gmail.com / password123</p>
+          <p className="mt-1">User: naresh.pema@ioco.tech / password123</p>
+        </div>
       </div>
     </div>
   )
